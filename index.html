@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Digits entry scanner for Deriv synthetic indices. Analysis only, no trading and no login.">
+<title>Entry Scanner</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0e14;--panel:#10151e;--card:#151b26;--inp:#0b0f16;--line:#252d3b;--txt:#e8ecf3;--mut:#8b95a7;--gold:#f5c542;--yel:#f3b92f;--grn:#3ddc84;--red:#ff5c6c;--acc:#6c8cff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.page{max-width:560px;margin:auto;padding:28px 18px 120px}
+.page h1{font-size:22px;margin:0 0 6px}
+.page p{color:var(--mut);margin:0 0 10px;font-size:14px}
+
+#launch{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:10px;z-index:5}
+#launch .tip{background:var(--panel);border:1px solid var(--line);color:var(--mut);font-size:12.5px;padding:7px 12px;border-radius:99px}
+#launch button{width:56px;height:56px;border-radius:50%;border:0;background:linear-gradient(135deg,#6c8cff,#a46cff);color:#fff;font-weight:800;font-size:17px;box-shadow:0 6px 22px rgba(108,140,255,.45)}
+
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:9}
+#panel{position:fixed;left:0;right:0;bottom:0;max-height:94vh;overflow:auto;background:var(--panel);border-top:1px solid var(--line);border-radius:20px 20px 0 0;padding:14px 14px calc(24px + env(safe-area-inset-bottom));display:none;z-index:10;max-width:640px;margin:auto}
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.head b{font-size:16px}
+.x{background:#232b3a;color:var(--txt);border:0;width:32px;height:32px;border-radius:50%;font-size:18px}
+.tag{font-size:11px;letter-spacing:.14em;color:var(--gold);font-weight:700}
+.h2{font-size:21px;font-weight:800;margin:2px 0 8px}
+.conn{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);margin-bottom:10px}
+.conn i{width:8px;height:8px;border-radius:50%;background:#555;flex:none}
+.conn.ok i{background:var(--grn)}.conn.bad i{background:var(--red)}.conn.wait i{background:var(--gold)}
+
+.ctl{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.g3{align-items:end;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.75fr) minmax(0,.95fr);gap:10px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.f label{display:block;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);margin:0 0 7px}
+select{width:100%;appearance:none;-webkit-appearance:none;background-color:var(--inp);color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:13px 28px 13px 12px;font:inherit;font-size:15.5px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9d1de' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.g3 select{font-size:14.5px;padding-left:10px;padding-right:24px;background-position:right 8px center}
+select option{background:#10151e;color:#e8ecf3}
+select:disabled{opacity:.45}
+select:focus{outline:1px solid var(--acc)}
+.actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.btn{border:0;border-radius:12px;padding:14px 18px;font-weight:800;font-size:16px;color:#1a1300;background:var(--yel)}
+.btn.sec{background:var(--inp);color:var(--txt);border:1px solid var(--line)}
+.btn:disabled{opacity:.45}
+.scanstat{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--mut)}
+#prog{height:4px;background:#232b3a;border-radius:4px;overflow:hidden;margin-top:12px;display:none}
+#prog i{display:block;height:100%;width:0;background:var(--yel);transition:width .2s}
+#err{color:var(--red);font-size:12.5px;margin-top:10px;display:none;word-break:break-word}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.box small{display:block;color:var(--mut);font-size:11.5px}
+.box b{font-size:15px}
+.sec-t{font-size:12px;letter-spacing:.06em;color:var(--mut);margin:18px 0 6px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--mut);font-weight:600;text-align:left;font-size:11.5px;padding:4px 4px}
+td{padding:9px 4px;border-top:1px solid var(--line)}
+tr.r{cursor:pointer}tr.sel td{background:#1b2436}
+.pos{color:var(--grn)}.neg{color:var(--red)}.mut{color:var(--mut)}.gold{color:var(--gold)}
+.entry{color:var(--gold);font-weight:800;letter-spacing:.08em}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:#556}
+.dot.pos{background:var(--grn)}.dot.gold{background:var(--gold)}.dot.neg{background:#556}
+
+.why{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px;display:none}
+.why-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.chip{font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px;border:1px solid currentColor}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+.kv span{color:var(--mut)}.kv b{text-align:right}
+.kv i{font-style:normal;color:var(--mut);font-weight:400;font-size:12px}
+
+.st{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:14px}
+.st h3{margin:0 0 8px;font-size:16px}
+.st-row{display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-top:1px solid var(--line)}
+.st-row b{font-size:15px}
+.st-row.hl b{color:var(--gold)}
+.st-row .v{font-size:20px;font-weight:800}
+.st-row .p{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--mut);margin-left:8px}
+.freq{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;align-items:end;margin-top:10px;height:92px}
+.fq{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:11px;color:var(--mut)}
+.fq i{display:block;width:100%;background:#2b3547;border-radius:4px 4px 0 0}
+.fq.b i{background:var(--gold)}
+.fq span{font-weight:700;color:var(--txt);margin-top:3px;font-size:12px}
+.fq small{font-size:9.5px}
+
+.digits{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;min-height:34px}
+.d{width:28px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:#232b3a;font-weight:700}
+.d.w{background:#12331f;color:var(--grn)}.d.l{background:#3a1820;color:var(--red)}
+.d.e{outline:2px solid var(--gold)}
+.digits.sm{gap:3px}.digits.sm .d{width:20px;height:24px;font-size:11px;border-radius:5px}
+.digits.xs{gap:3px}.digits.xs .d{width:12px;height:16px;font-size:0;border-radius:3px}
+.digits.xs .d.e,.digits.sm .d.e{outline-width:1.5px}
+.status{font-weight:700;margin-top:8px}
+.note{font-size:11.5px;color:var(--mut);margin-top:14px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Entry Scanner</h1>
+  <p>Analysis only. Places no trades, asks for no login, and reads public tick data from Deriv synthetic indices.</p>
+</div>
+
+<div id="launch"><span class="tip">Tap to open the scanner</span><button id="open" aria-label="Open scanner">AI</button></div>
+<div id="scrim"></div>
+
+<div id="panel" role="dialog" aria-label="Entry Scanner">
+  <div class="head"><b>Entry Scanner</b><button class="x" id="close" aria-label="Close">×</button></div>
+  <div class="tag">✦ DIGITS SCANNER</div>
+  <div class="h2">Digits Scanner</div>
+  <div class="conn wait" id="conn"><i></i><span id="connTxt">Not connected yet</span></div>
+
+  <div class="ctl">
+    <div class="g3">
+      <div class="f"><label for="selDepth">Scan depth (ticks)</label><select id="selDepth"></select></div>
+      <div class="f"><label for="selType">Trade type</label><select id="selType"></select></div>
+      <div class="f"><label for="selDigit">Watch digit</label><select id="selDigit"></select></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label for="selKlen">Entry digits</label><select id="selKlen"></select></div>
+      <div class="f"><label for="selWin">Chart window</label><select id="selWin"></select></div>
+    </div>
+    <div class="g2">
+      <div class="f"><label for="selMkt">Market</label><select id="selMkt"></select></div>
+      <div class="f"><label for="selStreak">Win streak needed</label><select id="selStreak"></select></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="scan">Scan markets</button>
+      <button class="btn sec" id="watch" disabled>Watch live</button>
+      <span class="scanstat" id="scanStat">Not scanned yet</span>
+    </div>
+    <div id="prog"><i></i></div>
+    <div id="err"></div>
+  </div>
+
+  <div class="two">
+    <div class="box"><small>Selected market</small><b id="selM">Scan to find the best entry</b></div>
+    <div class="box"><small>Best side</small><b id="selT">Waiting for scan</b></div>
+  </div>
+  <div class="why" id="why"></div>
+
+  <div class="sec-t" id="tblTitle">RANKED PICKS (TAP A ROW TO SELECT)</div>
+  <table>
+    <thead><tr><th>Market</th><th>Side</th><th>Entry</th><th>Edge</th><th>Score</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="5" class="mut">Not scanned yet</td></tr></tbody>
+  </table>
+  <div class="mut" style="font-size:11.5px;margin-top:6px"><span class="dot pos"></span>strong signal <span class="dot gold" style="margin-left:8px"></span>possible signal <span class="dot" style="margin-left:8px"></span>likely luck</div>
+
+  <div class="st">
+    <h3 id="stTitle">Digit stats</h3>
+    <div id="stBody"><span class="mut">No ticks loaded yet</span></div>
+    <div class="freq" id="freq"></div>
+    <div class="mut" style="font-size:11.5px;margin-top:8px" id="stNote"></div>
+  </div>
+
+  <div class="sec-t">LIVE DIGITS (NEWEST LAST). GOLD OUTLINE = ENTRY DIGIT.</div>
+  <div class="digits" id="digits"></div>
+  <div class="status mut" id="status">Waiting for an entry digit...</div>
+  <div class="mut" style="margin-top:6px;font-size:13px" id="tally"></div>
+
+  <div class="note">How the scan works: for the trade type you pick, it tests every side (for Over / Under that is Over 0–8 and Under 1–9) against every entry on the first 70% of ticks, keeps only entries that also beat chance on the last 30% (which they were not picked from), then ranks them by how unlikely the combined result is by luck. Edge is the last-30% hit rate minus the chance of that streak with no entry. Score is that unlikeliness (higher is rarer). A signal is labelled strong or possible only if its score beats what the best of all the combinations tested would reach by luck alone. In 80 test scans on simulated random data with nothing real in it, "strong" still showed up about 5% of the time and "possible" about 11% of the time, and on simulated data with a real pattern planted the scan found the right market and entry most of the time at 3000–5000 ticks. Deriv synthetic digits are generated randomly, so expect "likely luck" most of the time, and treat 2 and 3 digit entries with extra caution because they rest on very few samples. Analysis only, not financial advice.</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const MARKETS=[["R_10","Vol 10"],["R_25","Vol 25"],["R_50","Vol 50"],["R_75","Vol 75"],["R_100","Vol 100"],["1HZ10V","Vol 10 (1s)"],["1HZ25V","Vol 25 (1s)"],["1HZ50V","Vol 50 (1s)"],["1HZ75V","Vol 75 (1s)"],["1HZ100V","Vol 100 (1s)"]];
+const NAME=Object.fromEntries(MARKETS);
+// Public, no-login endpoints. All are tried at once and the first one that opens is used.
+const ENDPOINTS=[
+  {name:"new API",url:"wss://api.derivws.com/trading/v1/options/ws/public"},
+  {name:"public WS",url:"wss://ws.binaryws.com/websockets/v3"},
+  {name:"legacy API",url:"wss://ws.derivws.com/websockets/v3?app_id=1089"},
+  {name:"legacy API (binaryws)",url:"wss://ws.binaryws.com/websockets/v3?app_id=1089"}
+];
+const GROUPS=[["ou","Over/Under"],["md","Match/Differ"],["eo","Even/Odd"]];
+const HOLD=500; // ticks kept for the live strip
+
+/* ---------- controls ---------- */
+function fillSel(id,opts,val){$(id).innerHTML=opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('');if(val!=null)$(id).value=val}
+fillSel('selDepth',[1000,2000,3000,5000].map(v=>[v,v]),3000);
+fillSel('selType',GROUPS,'ou');
+fillSel('selKlen',[[1,'1 digit'],[2,'2 digits'],[3,'3 digits']],1);
+fillSel('selWin',[30,50,100,200,500].map(v=>[v,v]),100);
+fillSel('selMkt',[['ALL','Auto (best)'],...MARKETS],'ALL');
+fillSel('selStreak',[2,3,4,5,6,7].map(v=>[v,v+' wins']),3);
+function fillDigits(keep){
+  const g=$('selType').value,s=$('selDigit');
+  if(g==='eo'){s.innerHTML='<option value="">–</option>';s.disabled=true;return}
+  s.disabled=false;fillSel('selDigit',[['auto','Auto'],...[0,1,2,3,4,5,6,7,8,9].map(v=>[v,v])]);
+  s.value=(keep!=null&&[...s.options].some(o=>o.value===String(keep)))?keep:'auto';
+}
+fillDigits();
+function makeSide(type,b){
+  switch(type){
+    case'over':return{type,b,win:d=>d>b,p:(9-b)/10,label:'Over '+b};
+    case'under':return{type,b,win:d=>d<b,p:b/10,label:'Under '+b};
+    case'matches':return{type,b,win:d=>d===b,p:.1,label:'Matches '+b};
+    case'differs':return{type,b,win:d=>d!==b,p:.9,label:'Differs '+b};
+    case'even':return{type,b:null,win:d=>d%2===0,p:.5,label:'Even'};
+    default:return{type:'odd',b:null,win:d=>d%2===1,p:.5,label:'Odd'};
+  }
+}
+function sidesFor(g,dig){ // dig === null means Auto
+  const out=[];
+  if(g==='ou'){for(let b=0;b<=8;b++)if(dig==null||dig===b)out.push(makeSide('over',b));for(let b=1;b<=9;b++)if(dig==null||dig===b)out.push(makeSide('under',b))}
+  else if(g==='md'){for(let b=0;b<=9;b++)if(dig==null||dig===b){out.push(makeSide('matches',b));out.push(makeSide('differs',b))}}
+  else out.push(makeSide('even'),makeSide('odd'));
+  return out;
+}
+const manualDigit=()=>{const v=$('selDigit').value;return(v===''||v==='auto')?null:+v};
+const SAVE=['selDepth','selType','selDigit','selKlen','selWin','selMkt','selStreak'];
+function setIf(id,v){if(v!=null&&[...$(id).options].some(o=>o.value===String(v)))$(id).value=v}
+function saveSet(){try{localStorage.setItem('es_v3',JSON.stringify(Object.fromEntries(SAVE.map(i=>[i,$(i).value]))))}catch(e){}}
+(function loadSet(){try{
+  const s=JSON.parse(localStorage.getItem('es_v3')||'null');if(!s)return;
+  setIf('selType',s.selType);fillDigits(s.selDigit);
+  SAVE.forEach(i=>{if(i!=='selType'&&i!=='selDigit')setIf(i,s[i])});
+}catch(e){}})();
+
+/* ---------- panel ---------- */
+$('open').onclick=()=>{$('scrim').style.display='block';$('panel').style.display='block';ensureConn().then(ouLoad).catch(()=>{})};
+function closeP(){$('scrim').style.display='none';$('panel').style.display='none'}
+$('close').onclick=closeP;$('scrim').onclick=closeP;
+
+/* ---------- connection ---------- */
+let ws=null,pending=null,live=null,results=[],selIdx=-1,lastScan=null,connP=null,histQ=Promise.resolve(),rid=1;
+const cache={};
+function setConn(cls,txt){$('conn').className='conn '+cls;$('connTxt').textContent=txt}
+function showErr(t){const e=$('err');e.textContent=t||'';e.style.display=t?'block':'none'}
+function setScanStat(t){$('scanStat').textContent=t}
+
+function openSocket(ep){
+  return new Promise((res,rej)=>{
+    let done=false,s;
+    try{s=new WebSocket(ep.url)}catch(e){return rej(new Error('cannot start ('+e.message+')'))}
+    const fail=msg=>{if(!done){done=true;clearTimeout(to);try{s.close()}catch(e){}rej(new Error(msg))}};
+    const to=setTimeout(()=>fail('timed out after 7s'),7000);
+    s.onopen=()=>{if(!done){done=true;clearTimeout(to);res(s)}};
+    s.onerror=()=>fail('blocked or unreachable');
+    s.onclose=ev=>fail('closed before opening (code '+ev.code+')');
+  });
+}
+// A socket only counts as connected once it has actually returned tick history
+function probe(s){
+  return new Promise((res,rej)=>{
+    const id=rid++;
+    const to=setTimeout(()=>{s.onmessage=null;rej(new Error('connected but sent no data'))},7000);
+    s.onmessage=e=>{
+      let m;try{m=JSON.parse(e.data)}catch(x){return}
+      if(m.req_id!==undefined&&m.req_id!==id)return;
+      if(m.history&&m.history.prices&&m.history.prices.length){clearTimeout(to);s.onmessage=null;res()}
+      else if(m.error){clearTimeout(to);s.onmessage=null;rej(new Error('rejected the request: '+(m.error.message||m.error.code)))}
+    };
+    try{s.send(JSON.stringify({ticks_history:'R_100',adjust_start_time:1,count:5,end:'latest',style:'ticks',req_id:id}))}
+    catch(e){clearTimeout(to);rej(new Error('could not send'))}
+  });
+}
+function ensureConn(){
+  if(ws&&ws.readyState===1)return Promise.resolve();
+  if(connP)return connP;
+  connP=(async()=>{
+    setConn('wait','Connecting…');
+    const fails=[];
+    const win=await new Promise(resolve=>{
+      let left=ENDPOINTS.length,done=false;
+      ENDPOINTS.forEach(ep=>openSocket(ep).then(async s=>{
+        try{await probe(s)}catch(e){try{s.close()}catch(x){}throw e}
+        if(done){try{s.close()}catch(e){}return}
+        done=true;resolve({s,ep});
+      }).catch(e=>{fails.push(ep.name+': '+e.message);if(--left===0&&!done)resolve(null)}));
+    });
+    if(win){
+      const {s,ep}=win;
+      s.onmessage=onMsg;
+      s.onclose=()=>{if(ws===s){ws=null;setConn('bad','Disconnected. Tap Scan or Watch live to reconnect');
+        if(live)setStatus('Connection lost. Tap Watch live to resume.','neg')}};
+      ws=s;setConn('ok','Live data connected ('+ep.name+')');showErr('');return;
+    }
+    setConn('bad','Offline');
+    const sandboxed=location.protocol==='file:'||location.origin==='null';
+    showErr('Could not connect to Deriv. '+fails.join(' · ')+(sandboxed
+      ?' · This page is running as a local file or inside an app preview, which usually blocks live connections. Open it in Chrome, or host it on https (e.g. GitHub Pages).'
+      :' · page: '+location.origin));
+    throw new Error('offline');
+  })().finally(()=>{connP=null});
+  return connP;
+}
+setInterval(()=>{try{if(ws&&ws.readyState===1)ws.send('{"ping":1}')}catch(e){}},30000); // keep the socket from idling out
+function onMsg(e){
+  let m;try{m=JSON.parse(e.data)}catch(x){return}
+  if(m.tick){if(live&&(!m.tick.symbol||m.tick.symbol===live.sym))onTick(m.tick);return}
+  if(!pending)return;
+  if(m.req_id!==undefined&&m.req_id!==pending.id)return;
+  const echoed=m.echo_req&&m.echo_req.ticks_history;
+  if(echoed&&echoed!==pending.sym)return;
+  if(m.history||m.msg_type==='history'||(m.error&&(m.req_id!==undefined||echoed||!m.msg_type||m.msg_type==='history'))){
+    const p=pending;pending=null;clearTimeout(p.to);
+    m.error?p.rej(new Error(m.error.message||m.error.code)):p.res(m);
+  }
+}
+function history(sym,count){
+  const run=()=>new Promise((res,rej)=>{
+    const id=rid++,to=setTimeout(()=>{pending=null;rej(new Error('no reply for '+sym))},15000);
+    pending={res,rej,to,sym,id};
+    ws.send(JSON.stringify({ticks_history:sym,adjust_start_time:1,count,end:'latest',style:'ticks',req_id:id}));
+  });
+  const p=histQ.then(run,run);histQ=p.catch(()=>{});return p;
+}
+const toDigit=(p,pip)=>+Number(p).toFixed(pip).slice(-1);
+async function getDigits(sym,count){
+  let m;
+  try{m=await history(sym,count)}
+  catch(e){if(count>1000&&!/no reply/.test(e.message)){m=await history(sym,1000)}else throw e}
+  const prices=m.history&&m.history.prices;
+  if(!prices||!prices.length)throw new Error('empty history for '+sym);
+  const pip=m.pip_size!=null?m.pip_size:prices.reduce((mx,p)=>Math.max(mx,(String(p).split('.')[1]||'').length),0);
+  return {digits:prices.map(p=>toDigit(p,pip)),pip};
+}
+
+/* ---------- analysis ---------- */
+// ln(n!) table and the exact chance of getting at least k hits in n tries
+const LNF=[0];for(let i=1;i<=6500;i++)LNF[i]=LNF[i-1]+Math.log(i);
+const lpmf=(n,i,p)=>LNF[n]-LNF[i]-LNF[n-i]+i*Math.log(p)+(n-i)*Math.log(1-p);
+function tail(n,k,p){
+  if(k<=0)return 1;if(k>n)return 0;
+  const mean=n*p;let s=0;
+  if(k>mean){for(let i=k;i<=n;i++){const t=Math.exp(lpmf(n,i,p));s+=t;if(i>k+2&&t<1e-14*s)break}return Math.min(1,s)}
+  for(let i=0;i<k;i++)s+=Math.exp(lpmf(n,i,p));
+  return Math.max(1e-12,1-s);
+}
+const score=(n,h,p)=>h<=0?0:Math.min(8,-Math.log10(Math.max(1e-12,tail(n,h,p))));
+function analyse(dg,win,N,k){
+  const occ={},hit={};
+  for(let i=k;i+N<=dg.length;i++){
+    const key=dg.slice(i-k,i).join('');
+    occ[key]=(occ[key]||0)+1;
+    let ok=true;for(let j=0;j<N;j++)if(!win(dg[i+j])){ok=false;break}
+    if(ok)hit[key]=(hit[key]||0)+1;
+  }
+  return {occ,hit};
+}
+// indicators for one side on one market: overall lean, recent lean, how often N-win streaks occur vs chance
+function sideStats(dg,side,N){
+  const n=dg.length;let w=0;for(const d of dg)if(side.win(d))w++;
+  const z=(w/n-side.p)/Math.sqrt(side.p*(1-side.p)/n);
+  const rec=dg.slice(-300);let rw=0;for(const d of rec)if(side.win(d))rw++;
+  let run=0,streaks=0;for(let i=0;i<n;i++){if(side.win(dg[i])){run++;if(run>=N)streaks++}else run=0}
+  const exp=(n-N+1)*Math.pow(side.p,N);
+  return {z,recent:rw/rec.length-side.p,streakRatio:exp>0?streaks/exp:0};
+}
+// Method chosen by simulation: pick on the first 70%, require the entry to also beat chance on the last 30%,
+// then rank by how unlikely the combined (train+test) result is by luck.
+function scanMarket(sym,name,pip,dg,sides,N,k){
+  const cut=Math.floor(dg.length*.7),minOcc=k===1?20:k===2?8:4;
+  const trD=dg.slice(0,cut),teD=dg.slice(cut-k),rows=[];let combos=0;
+  for(const side of sides){
+    const tr=analyse(trD,side.win,N,k),te=analyse(teD,side.win,N,k),base=Math.pow(side.p,N),st=sideStats(dg,side,N);
+    for(const key in tr.occ){
+      const trn=tr.occ[key];if(trn<minOcc)continue;combos++;
+      const hits=tr.hit[key]||0,tn=te.occ[key]||0,th=te.hit[key]||0,test=tn?th/tn:0;
+      const valid=tn>=8&&test>base;
+      const sc=valid?score(trn+tn,hits+th,base):score(trn,hits,base);
+      rows.push({sym,name,pip,side,key,train:hits/trn,trainN:trn,test,testN:tn,base,valid,score:sc,rk:(valid?1000:0)+sc,
+        edge:test-base,lean:st.z,recent:st.recent,streakRatio:st.streakRatio});
+    }
+  }
+  rows.sort((a,b)=>b.rk-a.rk);
+  return {rows,combos};
+}
+const pct=x=>(x*100).toFixed(1)+'%';
+function verdict(r){
+  const L=lastScan.luck;
+  if(!r.valid)return{t:'Likely luck',c:'neg',why:'It did not beat chance on the last 30% of ticks.'};
+  if(r.score>=L+2)return{t:'Strong signal',c:'pos'};
+  if(r.score>=L+1)return{t:'Possible signal',c:'gold'};
+  return{t:'Likely luck',c:'neg',why:'Its score is no higher than the best of all combinations would reach by chance.'};
+}
+
+/* ---------- scan ---------- */
+$('scan').onclick=async()=>{
+  const g=$('selType').value,dig=manualDigit(),N=+$('selStreak').value,k=+$('selKlen').value,depth=+$('selDepth').value,mk=$('selMkt').value;
+  const sides=sidesFor(g,g==='eo'?null:dig);
+  const list=mk==='ALL'?MARKETS:MARKETS.filter(m=>m[0]===mk);
+  const btn=$('scan');btn.disabled=true;btn.textContent='Scanning…';
+  $('prog').style.display='block';showErr('');
+  results=[];selIdx=-1;let ok=0,combosAll=0;const bad=[];
+  try{
+    await ensureConn();
+    for(let i=0;i<list.length;i++){
+      const [sym,name]=list[i];
+      setScanStat(`Scanning ${i+1}/${list.length}…`);
+      $('prog').firstElementChild.style.width=((i+1)/list.length*100)+'%';
+      try{
+        const h=await getDigits(sym,depth);ok++;cache[sym]=h.digits.slice();
+        const {rows,combos}=scanMarket(sym,name,h.pip,h.digits,sides,N,k);combosAll+=combos;
+        if(mk==='ALL'){if(rows[0])results.push(rows[0])}else results.push(...rows.slice(0,10));
+      }catch(e){bad.push(sym+': '+e.message)}
+    }
+    if(!ok)showErr('Connected, but no market returned data. '+bad.slice(0,3).join(' · '));
+    else if(bad.length)showErr('Skipped: '+bad.join(' · '));
+    if(mk==='ALL')results.sort((a,b)=>b.rk-a.rk);
+    lastScan={group:g,N,k,combos:combosAll,luck:Math.log10(Math.max(2,combosAll)),depth};
+    selIdx=results.length?0:-1;
+    render();
+    setScanStat(results.length?`Done · ${ok} market${ok>1?'s':''} · ${combosAll.toLocaleString()} combinations`:(ok?'No entry had enough samples':'No data'));
+  }catch(e){setScanStat('Not connected')}
+  $('watch').disabled=selIdx<0;
+  btn.disabled=false;btn.textContent='Scan markets';
+  setTimeout(()=>{$('prog').style.display='none';$('prog').firstElementChild.style.width=0},400);
+};
+
+function render(){
+  const all=$('selMkt').value==='ALL';
+  $('tblTitle').textContent=all?'BEST PICK PER MARKET, BEST FIRST (TAP A ROW)':'TOP PICKS FOR THIS MARKET, BEST FIRST (TAP A ROW)';
+  if(!results.length){$('rows').innerHTML='<tr><td colspan="5" class="mut">No usable data</td></tr>';$('why').style.display='none';drawStats();return}
+  $('rows').innerHTML=results.map((r,i)=>{const v=verdict(r);
+    return `<tr class="r ${i===selIdx?'sel':''}" data-i="${i}">
+    <td><span class="dot ${v.c==='neg'?'':v.c}"></span>${r.name}</td><td>${r.side.label}</td><td class="entry">${r.key}</td>
+    <td class="${r.edge>=0?'pos':'neg'}">${r.edge>=0?'+':''}${(r.edge*100).toFixed(1)}%</td>
+    <td>${r.score.toFixed(1)}</td></tr>`}).join('');
+  document.querySelectorAll('tr.r').forEach(tr=>tr.onclick=()=>{selIdx=+tr.dataset.i;render()});
+  const r=results[selIdx];
+  if(r){
+    const v=verdict(r),L=lastScan;
+    $('selM').textContent=r.name;$('selT').textContent=r.side.label+' × '+L.N;
+    const sg=x=>(x>=0?'+':'')+x;
+    $('why').style.display='block';
+    $('why').innerHTML=`<div class="why-h"><b>${r.name} · ${r.side.label} × ${L.N} · entry <span class="entry">${r.key}</span></b><span class="chip ${v.c}">${v.t}</span></div>
+      ${v.why?`<div class="mut" style="font-size:12.5px;margin-bottom:4px">${v.why}</div>`:''}
+      <div class="kv"><span>Train hit rate (first 70%)</span><b>${pct(r.train)} <i>n=${r.trainN}</i></b></div>
+      <div class="kv"><span>Test hit rate (last 30%)</span><b>${pct(r.test)} <i>n=${r.testN}</i></b></div>
+      <div class="kv"><span>Chance with no entry</span><b>${pct(r.base)}</b></div>
+      <div class="kv"><span>Score vs luck</span><b>${r.score.toFixed(1)} <i>vs about ${L.luck.toFixed(1)} expected from luck across ${L.combos.toLocaleString()} combinations</i></b></div>
+      <div class="kv"><span>Lean (whole sample)</span><b>${sg(r.lean.toFixed(1))}σ <i>${r.side.label} wins more (+) or less (−) than its odds</i></b></div>
+      <div class="kv"><span>Recent lean (last 300 ticks)</span><b>${sg((r.recent*100).toFixed(1))} pts</b></div>
+      <div class="kv"><span>Streak ratio</span><b>${r.streakRatio.toFixed(2)}× <i>${L.N}-win streaks vs chance (above 1 means wins cluster)</i></b></div>`;
+  }
+  drawStats();
+}
+
+/* ---------- digit stats ---------- */
+function statSym(){const mk=$('selMkt').value;if(mk!=='ALL')return mk;return selIdx>=0&&results[selIdx]?results[selIdx].sym:null}
+function statSpec(){
+  if(selIdx>=0&&results[selIdx])return{type:results[selIdx].side.type,b:results[selIdx].side.b,hl:true};
+  const g=$('selType').value,d=manualDigit();
+  if(g==='eo')return{type:'even',b:null,hl:false};
+  if(d==null)return null;
+  if(g==='md')return{type:'matches',b:d,hl:false};
+  return{type:d>=9?'under':'over',b:d,hl:false};
+}
+function drawStats(){
+  const sym=statSym(),dg=sym&&cache[sym],sp=statSpec();
+  $('stTitle').textContent='Digit stats'+(sym?' · '+NAME[sym]:'');
+  if(!dg||!dg.length){
+    $('stBody').innerHTML='<span class="mut">'+(sym?'No ticks loaded yet':'Scan, or pick a single market, to see stats')+'</span>';
+    $('freq').innerHTML='';$('stNote').textContent='';return;
+  }
+  const n=dg.length,cnt=Array(10).fill(0);dg.forEach(d=>cnt[d]++);
+  const sum=f=>cnt.reduce((s,c,d)=>s+(f(d)?c:0),0),b=sp?sp.b:null;
+  const row=(label,c,hl)=>`<div class="st-row ${hl?'hl':''}"><b>${label}</b><span><span class="v">${c}</span><span class="p">${(c/n*100).toFixed(1)}%</span></span></div>`;
+  let h='';
+  if(sp){
+    const hl=sp.hl,t=sp.type;
+    if(t==='over'||t==='under')h=row('Under '+b,sum(d=>d<b),hl&&t==='under')+row('Equal ('+b+')',cnt[b],false)+row('Over '+b,sum(d=>d>b),hl&&t==='over');
+    else if(t==='matches'||t==='differs')h=row('Matches '+b,cnt[b],hl&&t==='matches')+row('Differs '+b,n-cnt[b],hl&&t==='differs');
+    else h=row('Even',sum(d=>d%2===0),hl&&t==='even')+row('Odd',sum(d=>d%2===1),hl&&t==='odd');
+  }
+  $('stBody').innerHTML=h||'<span class="mut">Pick a Watch digit, or scan, to see counts for a side</span>';
+  const mx=Math.max(...cnt);
+  $('freq').innerHTML=cnt.map((c,d)=>`<div class="fq ${d===b?'b':''}"><small>${(c/n*100).toFixed(1)}</small><i style="height:${Math.max(3,c/mx*54)}px"></i><span>${d}</span></div>`).join('');
+  $('stNote').textContent=`Sample: last ${n} ticks`+(live&&live.sym===sym?' (updating live)':'');
+}
+async function ouLoad(){
+  const mk=$('selMkt').value;drawStats();
+  if(mk==='ALL'||cache[mk])return;
+  try{
+    await ensureConn();
+    const h=await getDigits(mk,+$('selDepth').value);
+    cache[mk]=h.digits;if($('selMkt').value===mk)drawStats();
+  }catch(e){if(e.message!=='offline')showErr('Could not load ticks: '+e.message)}
+}
+
+/* ---------- live ---------- */
+$('watch').onclick=async()=>{
+  const r=results[selIdx];if(!r||!lastScan)return;
+  try{
+    await ensureConn();
+    ws.send(JSON.stringify({forget_all:'ticks'}));
+    const h=await getDigits(r.sym,HOLD);
+    live={sym:r.sym,key:r.key.split('').map(Number),k:r.key.length,N:lastScan.N,side:r.side,pip:h.pip,
+      digits:h.digits.slice(-HOLD),win:null,wins:0,entries:0,hits:0,misses:0};
+    setStatus('Watching '+r.name+' for entry '+r.key+' ('+r.side.label+')…','');drawLive();
+    ws.send(JSON.stringify({ticks:r.sym,subscribe:1}));
+  }catch(e){showErr('Live watch failed: '+e.message)}
+};
+function onTick(t){
+  const L=live,d=toDigit(t.quote,t.pip_size!=null?t.pip_size:L.pip);
+  if(L.win!==null){
+    if(L.side.win(d)){L.wins++;
+      if(L.wins===L.N){L.hits++;L.win=null;setStatus('Streak completed ✔','pos')}
+      else setStatus(`In window: ${L.wins}/${L.N} wins`,'')}
+    else{L.misses++;L.win=null;setStatus('Streak broken ✘ Waiting for entry…','neg')}
+  }
+  L.digits.push(d);if(L.digits.length>HOLD)L.digits.shift();
+  const c=cache[L.sym];if(c){c.push(d);if(c.length>+$('selDepth').value+500)c.shift()}
+  if(statSym()===L.sym)drawStats();
+  if(L.win===null&&L.digits.length>=L.k){
+    const tail=L.digits.slice(-L.k);
+    if(tail.every((v,i)=>v===L.key[i])){L.win=0;L.wins=0;L.entries++;setStatus(`ENTRY ${L.key.join('')} seen. Next ${L.N} ticks are the window`,'')}
+  }
+  drawLive();
+}
+function setStatus(txt,cls){const s=$('status');s.textContent=txt;s.className='status '+(cls||'mut')}
+function drawLive(){
+  if(!live)return;
+  const L=live,W=+$('selWin').value,arr=L.digits.slice(-W),n=arr.length,mark=new Set();
+  for(let i=L.k-1;i<n;i++){let ok=true;for(let j=0;j<L.k;j++)if(arr[i-L.k+1+j]!==L.key[j]){ok=false;break}
+    if(ok)for(let j=0;j<L.k;j++)mark.add(i-j)}
+  $('digits').className='digits'+(W>200?' xs':W>60?' sm':'');
+  $('digits').innerHTML=arr.map((d,i)=>`<div class="d ${L.side.win(d)?'w':'l'} ${mark.has(i)?'e':''}" title="${d}">${d}</div>`).join('');
+  const done=L.hits+L.misses;
+  $('tally').textContent=`Entries: ${L.entries} · streaks hit: ${L.hits} · broken: ${L.misses}`+(done?` · live hit rate ${pct(L.hits/done)}`:'');
+}
+
+/* ---------- wiring ---------- */
+const stale=()=>{if(results.length)setScanStat('Settings changed. Scan again.')};
+$('selType').onchange=()=>{fillDigits();saveSet();drawStats();stale()};
+$('selDigit').onchange=()=>{saveSet();drawStats();stale()};
+$('selMkt').onchange=()=>{saveSet();ouLoad();stale()};
+$('selWin').onchange=()=>{saveSet();drawLive()};
+['selDepth','selKlen','selStreak'].forEach(i=>$(i).onchange=()=>{saveSet();stale()});
+drawStats();
+</script>
+</body>
+</html>
